@@ -35,12 +35,9 @@ checkHBQ(HoldBackQ,DeliveryQ) -> Min = lists:min(dict:fetch_keys(HoldBackQ)),
                                  end.
 
 eraseOverhead(HoldBackQ,DeliveryQ) -> MaxTexts = getConfigMaxTexts(),
+                                      MaxTextsHB = MaxTexts/2,
                                       KeysH = dict:fetch_keys(HoldBackQ),
-                                      SizeH = lists:size(KeysH),
-                                      if
-                                          SizeH >= MaxTexts -> ResH = dict:erase(lists:min(KeysH),HoldBackQ);
-                                          true -> ResH = HoldBackQ
-                                      end,
+                                      ResH = eraseSomething(MaxTextsHB,lists:min(KeysH),HoldBackQ),
                                       KeysD = dict:fetch_keys(HoldBackQ),
                                       SizeD = lists:size(KeysD),
                                       if
@@ -48,6 +45,16 @@ eraseOverhead(HoldBackQ,DeliveryQ) -> MaxTexts = getConfigMaxTexts(),
                                           true -> ResD = DeliveryQ
                                       end,
                                       {ResH,ResD}.
+
+eraseSomething(Max,MinKey,HBQ) ->
+  Keys = dict:fetch_keys(HBQ),
+  Size = lists:max(Keys)-lists:min(Keys),
+  if
+      Size >= Max -> eraseSomething(Max,MinKey,dict:erase(lists:min(MinKey),HBQ));
+      true -> io:format("*** Fehlernachricht fuer Nachrichtennummern ~p bis ~p um ~p~n",[MinKey,lists:min(Keys)-1,erlang:now()]),HBQ
+  end.
+
+
 
 
 get(PID,Clients) -> Val = dict:find(PID,Clients),
