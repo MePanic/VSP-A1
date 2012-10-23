@@ -6,60 +6,52 @@
 
 
 start() ->
-	{ok, CfgList} = file:consult("client.cfg"),
-	{ok, ClientsNr} = werkzeug:get_config_value(clients, CfgList),
-	startX(ClientsNr).
-
-startX(Nr) -> 
-	{ok, CfgList} = file:consult("client.cfg"),
-	lists:map(fun(X)->spawn(fun()->init(X,CfgList,node()) end) end,lists:seq(1,Nr)).
+			{ok, CfgList} = file:consult("client.cfg"),
+			{ok, ClientsNr} = werkzeug:get_config_value(clients, CfgList),
+			lists:map(fun(X)->spawn(fun()->init(X,CfgList,node()) end) end,lists:seq(1,ClientsNr)).
 
 start(Node) ->
-	{ok, CfgList} = file:consult("client.cfg"),
-	{ok, ClientsNr} = werkzeug:get_config_value(clients, CfgList),
-	startX(ClientsNr,Node).
-
-startX(Nr,Node) -> 
-	{ok, CfgList} = file:consult("client.cfg"),
-	lists:map(fun(X)->spawn(fun()->init(X,CfgList,Node) end) end,lists:seq(1,Nr)).
-	
+			{ok, CfgList} = file:consult("client.cfg"),
+			{ok, ClientsNr} = werkzeug:get_config_value(clients, CfgList),
+			lists:map(fun(X)->spawn(fun()->init(X,CfgList,Node) end) end,lists:seq(1,ClientsNr)).	
 	
 init(Number,CfgList,Node) -> 
-	{ok, Lifetime} = werkzeug:get_config_value(lifetime, CfgList),
-	CPID=self(),
-	spawn(fun()->timer:kill_after(Lifetime*1000,CPID) end),
-	{ok, ServName} = werkzeug:get_config_value(servername, CfgList),
-	{ok, SendItv} = werkzeug:get_config_value(sendeintervall, CfgList),
-	loopEdit(#state{clNr=Number,servName={ServName,Node},sendItv=SendItv,sendCounter=1,gotAll=false}).
+			{ok, Lifetime} = werkzeug:get_config_value(lifetime, CfgList),
+			CPID=self(),
+			spawn(fun()->timer:kill_after(Lifetime*1000,CPID) end),
+			{ok, ServName} = werkzeug:get_config_value(servername, CfgList),
+			{ok, SendItv} = werkzeug:get_config_value(sendeintervall, CfgList),
+			loopEdit(#state{clNr=Number,servName={ServName,Node},sendItv=SendItv,sendCounter=1,gotAll=false}).
 
+	
 loopRead(S= #state{gotAll=GotAll}) ->
             if  GotAll==true ->
-                    loopEdit(S#state{gotAll=false});
-                true ->
-                    loopRead(getMessage(S))
+				loopEdit(S#state{gotAll=false});
+			true ->
+				loopRead(getMessage(S))
             end.
 			
 loopEdit(S= #state{sendItv=SendItv,sendCounter=SendCounter})->            
             if SendCounter > 5 ->
-                    loopRead(S#state{sendCounter=1,sendItv=randomItv(SendItv)});
-                true ->
-                    sendMessage(S),
-                    loopEdit(S#state{sendCounter=SendCounter+1})
+				loopRead(S#state{sendCounter=1,sendItv=randomItv(SendItv)});
+            true ->
+				sendMessage(S),
+				loopEdit(S#state{sendCounter=SendCounter+1})
             end.
 	
 	
 sendMessage(#state{clNr=ClNr,sendItv= SendItv, servName = ServName}) -> 
             Id = getMsgId(ServName),
-            Msg = lists:concat([net_adm:localhost(),":1-10-Client",ClNr,": ",Id,". Msg. Time: ", werkzeug:timeMilliSecond(),"|"]),
+            Msg = lists:concat([net_adm:localhost(),":2-TeamNr-Client",ClNr,": ",Id,". Msg. Time: ", werkzeug:timeMilliSecond(),"|"]),
             ServName ! {dropmessage,{Msg,Id}},
-            timer:sleep(secToMsec(SendItv)),
+			timer:sleep(round(SendItv * math:pow(10,3))),
             werkzeug:logging( log_file_name(ClNr), lists:concat([Msg,io_lib:nl()])).
 			
 			
 getMessage(S=#state{clNr=ClNr,servName=ServName}) -> 
 			ServName ! {getmessages, self()},
             receive {Msg,GotAll} -> 
-				werkzeug:logging(log_file_name(ClNr), lists:concat([Msg,"ArvTime Cl: ",werkzeug:timeMilliSecond(),io_lib:nl()] )),
+				werkzeug:logging(log_file_name(ClNr), lists:concat([Msg,"ArvTime Client: ",werkzeug:timeMilliSecond(),io_lib:nl()] )),
 				S#state{gotAll=GotAll}
             end.
 			
@@ -85,5 +77,3 @@ newDt(SendItv) ->
 			true -> Dt
 			end.
 			
-			
-secToMsec(Sec) -> round(Sec * math:pow(10,3)).
