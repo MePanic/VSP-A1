@@ -38,7 +38,7 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
                                               loopServ(X,HoldBackQ,DeliveryQ,Clients1,ClientTimeout,DlqMax,Difftime);
                                           true ->
                                               ResC = dict:store(PID,{DelMin+1,timestamp()},Clients1),
-                                              PID ! {dict:fetch(DelMin,DeliveryQ),wasLast(DelMin,DeliveryQ)},io:format("gesendet2 ~n"),
+                                              PID ! {dict:fetch(DelMin,DeliveryQ),wasLast(DelMin,DeliveryQ)},
                                               loopServ(X,HoldBackQ,DeliveryQ,ResC,ClientTimeout,DlqMax,Difftime)
                                         end;
 
@@ -100,9 +100,7 @@ get(PID,Clients) -> case dict:find(PID,Clients) of
 checkClients(C,ClientTimeout) ->
   S = dict:size(C),
 if  S < 1 -> C;
-true ->
-  %io:format("Hier sollte gefiltert werden~n"),C end.
-                    dict:filter(fun(_,{_,Time}) ->  (timestamp()- Time) <  ClientTimeout end,C) end.
+true -> dict:filter(fun(_,{_,Time}) ->  (timestamp()- Time) <  ClientTimeout end,C) end.
 
 timestamp() ->
   {Mega, Secs, _} = now(),
