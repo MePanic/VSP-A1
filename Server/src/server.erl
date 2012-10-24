@@ -40,7 +40,7 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
     {dropmessage,{Nachricht,Nummer}} ->
       io:format("storing text;~n"),
       %%einmal mit length ausgeben versuchen
-      io:format("old; ~p~n",[lists:concat(dict:fetch_keys(HoldBackQ))]),
+      %%io:format("old; ~p~n",[lists:concat(dict:fetch_keys(HoldBackQ))]),
       HBQ1 = dict:store(Nummer,Nachricht,HoldBackQ),
       io:format("new; ~p~n",[lists:concat(dict:fetch_keys(HBQ1))]),
                                         {HBQ,DLQ} = checkQs(HBQ1,DeliveryQ,DlqMax),
@@ -59,7 +59,7 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
                                         loopServ(X,HoldBackQ,DeliveryQ,Clients1,ClientTimeout,DlqMax,Difftime);
     _ ->    io:format("nicht verstanden~n")
 
-    after Difftime  -> exit(normal)
+    after (Difftime*1000)  -> io:format("Server Ende.~n"),exit(normal)
   end.
 
 wasLast(Num,DeliveryQ) -> Temp = lists:max(dict:fetch_keys(DeliveryQ))+1,if
@@ -70,39 +70,45 @@ wasLast(Num,DeliveryQ) -> Temp = lists:max(dict:fetch_keys(DeliveryQ))+1,if
 
 %%prüft ob nächste nachricht in der hbq für dlq verfügbar ist, wenn nicht prüft er die größen der qs
 checkQs(HoldBackQ,DeliveryQ,DlqMax) -> Keys = dict:fetch_keys(DeliveryQ),
-                                       if Keys == [] -> Min = 0;
+                                       if Keys == [] -> Min = 1;
                                           true -> Min = (lists:max(dict:fetch_keys(DeliveryQ))+1)
                                        end,
-                                io:format("CheckHBQ ~n"),
+                                io:format("CheckQs mit min ~p: ~n",[Min]),
                                  case dict:find(Min,HoldBackQ) of
                                       error -> checkSize(HoldBackQ,DeliveryQ,DlqMax);
                                       {ok,Val} -> checkQs(dict:erase(Min,HoldBackQ),dict:store(Min,dict:fetch(Min,HoldBackQ),DeliveryQ),DlqMax)
                                  end.
 
 checkSize(HoldBackQ,DeliveryQ,DlqMax) ->
+  io:format("CheckSize ~n"),
   ResD = checkDLQ(DeliveryQ,DlqMax),
   ResH = checkHBQ(HoldBackQ,ResD,DlqMax),
   {ResH,ResD}.
 
 checkDLQ(DeliveryQ,DlqMax) ->
+  io:format("CheckDLQ ~n"),
   KeysD = dict:fetch_keys(DeliveryQ),
   SizeD = erlang:length(KeysD),
   if
-    SizeD >= DlqMax -> checkDLQ(dict:erase(lists:min(KeysD),DeliveryQ),DlqMax);
+    SizeD >= DlqMax ->
+      io:format("Erase DLQ ~p ~n",[lists:min(KeysD)]),checkDLQ(dict:erase(lists:min(KeysD),DeliveryQ),DlqMax);
     true -> DeliveryQ
   end.
 
 checkHBQ(HoldBackQ,DeliveryQ,DlqMax) ->
+  io:format("CheckHBQ ~n"),
   KeysH = dict:fetch_keys(HoldBackQ),
   SizeH = erlang:length(KeysH),
   Max = DlqMax/2,
+  if KeysH == [] -> HoldBackQ;
+true ->
   MinK = lists:min(KeysH),
   if
       SizeH >= Max -> ResH = dict:erase(lists:min(KeysH),HoldBackQ),
                       io:format("*** Fehlernachricht fuer Nachrichtennummern ~p bis ~p um ~p~n",[MinK,lists:min(dict:fetch_keys(ResH))-1,erlang:now()]),
                       checkQs(ResH,DeliveryQ,DlqMax);
       true -> HoldBackQ
-  end.
+  end end.
 
 get(PID,Clients) -> Val = dict:find(PID,Clients),
                      if
@@ -121,12 +127,6 @@ true ->
   io:format("debug13~n"),
                     dict:filter(Fun,C),
 io:format("debug14~n"),0 end.
-
-
-getConfigTime() -> notImplemented .
-
-getConfigMaxTexts() -> notImplemented .
-
 
 log(Log) -> spawn( fun() -> io:format(Log),file:write_file("NServer.log",Log,[append])end).
 
