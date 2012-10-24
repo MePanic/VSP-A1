@@ -32,7 +32,7 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
       io:format("storing text;~n"),
       HBQ1 = dict:store(Nummer,Nachricht,HoldBackQ),
                                         {HBQ,DLQ} = checkQs(HBQ1,DeliveryQ,DlqMax),
-                                        werkzeug:logging("NServer.log",lists:concat([appendTimeStamp(Nachricht, "Empfangszeit"),"-dropmessage",io_lib:nl()])),
+                                        %%werkzeug:logging("NServer.log",lists:concat([appendTimeStamp(Nachricht, "Empfangszeit"),"-dropmessage",io_lib:nl()])),
                                         loopServ(X,HBQ,DLQ,Clients,ClientTimeout,DlqMax,Difftime);
 
     {getmessages,PID} ->
@@ -74,8 +74,7 @@ checkQs(HoldBackQ,DeliveryQ,DlqMax) -> Keys = dict:fetch_keys(DeliveryQ),
 
 checkSize(HoldBackQ,DeliveryQ,DlqMax) ->
   io:format("CheckSize ~n"),
-  ResD = checkDLQ(DeliveryQ,DlqMax),
-  ResH = checkHBQ(HoldBackQ,ResD,DlqMax),
+  {ResH,ResD} = checkHBQ(HoldBackQ,checkDLQ(DeliveryQ,DlqMax),DlqMax),
   {ResH,ResD}.
 
 checkDLQ(DeliveryQ,DlqMax) ->
@@ -93,14 +92,15 @@ checkHBQ(HoldBackQ,DeliveryQ,DlqMax) ->
   KeysH = dict:fetch_keys(HoldBackQ),
   SizeH = erlang:length(KeysH),
   Max = DlqMax/2,
-  if KeysH == [] -> HoldBackQ;
+  if KeysH == [] -> {HoldBackQ,DeliveryQ};
 true ->
   MinK = lists:min(KeysH),
   if
       SizeH >= Max -> ResH = dict:erase(lists:min(KeysH),HoldBackQ),
-                      io:format("*** Fehlernachricht fuer Nachrichtennummern ~p bis ~p um ~p~n",[MinK,lists:min(dict:fetch_keys(ResH))-1,erlang:now()]),
-                      checkQs(ResH,DeliveryQ,DlqMax);
-      true -> HoldBackQ
+                      ResD = dict:store(MinK,dict:fetch(MinK,HoldBackQ),DeliveryQ),
+                      io:format("*** Fehlernachricht fuer Nachrichtennummern ~p bis ~p um ~p~n",[lists:max(dict:fetch_keys(DeliveryQ))+1,lists:min(dict:fetch_keys(ResH))-2,erlang:now()]),
+                      checkQs(ResH,ResD,DlqMax);
+      true -> {HoldBackQ,DeliveryQ}
   end end.
 
 get(PID,Clients) -> Val = dict:find(PID,Clients),
@@ -118,7 +118,7 @@ true ->
 
 
 
-log(Log) -> spawn( fun() -> io:format(Log),file:write_file("NServer.log",Log,[append])end).
+%%log(Log) -> spawn( fun() -> io:format(Log),file:write_file("NServer.log",Log,[append])end).
 
 
 appendTimeStamp(Message,Type) ->
