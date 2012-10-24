@@ -24,7 +24,7 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
                                         loopServ(X+1,HoldBackQ,DeliveryQ,Clients,ClientTimeout,DlqMax,Difftime);
 
 
-    {dropmessage,{Nachricht,Nummer}} -> HBQ1 = dict:store(Nummer,Nachricht,HoldBackQ),
+    {dropmessage,{Nachricht,Nummer}} -> HBQ1 = dict:store(Nummer,lists:concat([Nachricht, "ArvTime Serv: ",werkzeug:timeMilliSecond(), "|"]),HoldBackQ),
                                         {HBQ,DLQ} = checkQs(HBQ1,DeliveryQ,DlqMax),
                                         werkzeug:logging("NServer.log",lists:concat([appendTimeStamp(Nachricht, "Empfangszeit"),"-dropmessage",io_lib:nl()])),
                                         loopServ(X,HBQ,DLQ,Clients,ClientTimeout,DlqMax,Difftime);
@@ -34,11 +34,11 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
                                         DelMin = lists:min(dict:fetch_keys(DeliveryQ)),
                                         if
                                           Num >= DelMin ->
-                                              PID ! {dict:fetch(Num,DeliveryQ),wasLast(Num,DeliveryQ)},
+                                              PID ! {lists:concat([dict:fetch(Num,DeliveryQ),"SendTime Serv: ",werkzeug:timeMilliSecond(), "|"]),wasLast(Num,DeliveryQ)},
                                               loopServ(X,HoldBackQ,DeliveryQ,Clients1,ClientTimeout,DlqMax,Difftime);
                                           true ->
                                               ResC = dict:store(PID,{DelMin+1,timestamp()},Clients1),
-                                              PID ! {dict:fetch(DelMin,DeliveryQ),wasLast(DelMin,DeliveryQ)},
+                                              PID ! {lists:concat([dict:fetch(DelMin,DeliveryQ),"SendTime Serv: ",werkzeug:timeMilliSecond(), "|"]),wasLast(DelMin,DeliveryQ)},
                                               loopServ(X,HoldBackQ,DeliveryQ,ResC,ClientTimeout,DlqMax,Difftime)
                                         end;
 
@@ -105,8 +105,6 @@ true -> dict:filter(fun(_,{_,Time}) ->  (timestamp()- Time) <  ClientTimeout end
 timestamp() ->
   {Mega, Secs, _} = now(),
   Mega*1000000 + Secs.
-
-%%log(Log) -> spawn( fun() -> io:format(Log),file:write_file("NServer.log",Log,[append])end).
 
 
 appendTimeStamp(Message,Type) ->
