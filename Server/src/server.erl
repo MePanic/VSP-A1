@@ -101,9 +101,8 @@ checkClients(C,ClientTimeout) ->
   S = dict:size(C),
 if  S < 1 -> C;
 true ->
-  io:format("Hier sollte gefiltert werden~n"),C end.
-                    %%dict:filter(fun(_,{_,Time}) ->  (timestamp()- Time) <  ClientTimeout end,C) end.
-%%orddict:filter(fun(_,{_,Timestamp}) -> (timestamp() - Timestamp) < ClientTimeout end,C) end.
+  %io:format("Hier sollte gefiltert werden~n"),C end.
+                    dict:filter(fun(_,{_,Time}) ->  (timestamp()- Time) <  ClientTimeout end,C) end.
 
 timestamp() ->
   {Mega, Secs, _} = now(),
