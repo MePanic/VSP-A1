@@ -37,7 +37,7 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
                                               PID ! {dict:fetch(Num,DeliveryQ),wasLast(Num,DeliveryQ)},
                                               loopServ(X,HoldBackQ,DeliveryQ,Clients1,ClientTimeout,DlqMax,Difftime);
                                           true ->
-                                              ResC = dict:store(PID,{DelMin,timestamp()},Clients1),
+                                              ResC = dict:store(PID,{DelMin+1,timestamp()},Clients1),
                                               PID ! {dict:fetch(DelMin,DeliveryQ),wasLast(DelMin,DeliveryQ)},io:format("gesendet2 ~n"),
                                               loopServ(X,HoldBackQ,DeliveryQ,ResC,ClientTimeout,DlqMax,Difftime)
                                         end;
