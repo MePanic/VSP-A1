@@ -16,7 +16,6 @@ start() ->
   register(Name,ServerPid),
   %%werkzeug:logging("NServer.log",lists:concat([appendTimeStamp("Server Startzeit: ", " mit PID "),self(),io_lib:nl()])),
   client:start(),
-  %%ServerPid ! {getmsgid,ServerPid},
   ServerPid.
 
 loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
@@ -29,38 +28,32 @@ loopServ(X,HoldBackQ,DeliveryQ,C,ClientTimeout,DlqMax,Difftime) ->
                                         loopServ(X+1,HoldBackQ,DeliveryQ,Clients,ClientTimeout,DlqMax,Difftime);
 
 
-%%    {1} -> io:format("geht1~n"), self() ! {dropmessage,{"blablabla1",1}},loopServ(X,HoldBackQ,DeliveryQ,Clients,ClientTimeout,DlqMax);
-%%    {2} -> io:format("geht2~n"), self() ! {dropmessage,{"blablabla2",2}},loopServ(X,HoldBackQ,DeliveryQ,Clients,ClientTimeout,DlqMax);
-%%    {3} -> io:format("geht3~n"),loopServ(X,HoldBackQ,DeliveryQ,Clients,ClientTimeout,DlqMax);
-
-
-%%    {dropmessage,{Nachricht,3}} ->  self() ! {getmessages,self()};
-
-
     {dropmessage,{Nachricht,Nummer}} ->
       io:format("storing text;~n"),
-      %%einmal mit length ausgeben versuchen
-      %%io:format("old; ~p~n",[lists:concat(dict:fetch_keys(HoldBackQ))]),
       HBQ1 = dict:store(Nummer,Nachricht,HoldBackQ),
-      io:format("new; ~p~n",[lists:concat(dict:fetch_keys(HBQ1))]),
                                         {HBQ,DLQ} = checkQs(HBQ1,DeliveryQ,DlqMax),
                                         werkzeug:logging("NServer.log",lists:concat([appendTimeStamp(Nachricht, "Empfangszeit"),"-dropmessage",io_lib:nl()])),
-
-
-%%      self() ! {getmsgid,self()},
-
                                         loopServ(X,HBQ,DLQ,Clients,ClientTimeout,DlqMax,Difftime);
-%%    {Text,false} ->  io:format("getmsg~p~n",[Text]),self() ! {getmessages,self()};
-%%    {Text,true} ->  io:format("fertig~n");
 
     {getmessages,PID} ->
-      io:format("debug5~n"),              {Num,Clients1}  = get(PID,Clients),
-                                        PID ! {dict:fetch(Num,DeliveryQ),wasLast(Num,DeliveryQ)},
-                                        loopServ(X,HoldBackQ,DeliveryQ,Clients1,ClientTimeout,DlqMax,Difftime);
+                                        {Num,Clients1}  = get(PID,Clients),io:format("nummer ~p ~n",[Num]),
+                                        DelMin = lists:min(dict:fetch_keys(DeliveryQ)),io:format("neue nummer ~p ~n",[DelMin]),
+                                        if
+                                          Num >= DelMin ->
+                                              PID ! {dict:fetch(Num,DeliveryQ),wasLast(Num,DeliveryQ)},io:format("gesendet1 ~n"),
+                                              loopServ(X,HoldBackQ,DeliveryQ,Clients1,ClientTimeout,DlqMax,Difftime);
+                                          true ->
+                                              ResC = dict:store(PID,DelMin,Clients1),
+                                              PID ! {dict:fetch(DelMin,DeliveryQ),wasLast(DelMin,DeliveryQ)},io:format("gesendet2 ~n"),
+                                              loopServ(X,HoldBackQ,DeliveryQ,ResC,ClientTimeout,DlqMax,Difftime)
+                                        end,io:format("gesendet ~n");
+
     _ ->    io:format("nicht verstanden~n")
 
     after (Difftime*1000)  -> io:format("Server Ende.~n"),exit(normal)
   end.
+
+
 
 wasLast(Num,DeliveryQ) -> Temp = lists:max(dict:fetch_keys(DeliveryQ))+1,if
                             Temp > Num -> true;
@@ -112,21 +105,18 @@ true ->
 
 get(PID,Clients) -> Val = dict:find(PID,Clients),
                      if
-                        is_integer(Val) -> {Val,dict:store(PID,{Val+1,erlang:now()},Clients)};
-                        true -> {0,dict:store(PID,{0,erlang:now()},Clients)}
+                        is_integer(Val) -> {Val,dict:store(PID,{Val+1,werkzeug:timeMilliSecond()},Clients)};
+                        true -> {1,dict:store(PID,{1,werkzeug:timeMilliSecond()},Clients)}
                      end.
 
 checkClients(C,ClientTimeout) ->
   S = dict:size(C),
 if  S < 1 -> C;
 true ->
-  io:format("debug12~n"),
-                    Fun = fun({Key,{Val,Time}}) ->
-                      (Time - werkzeug:timeMilliSecond()) <  ClientTimeout
-                          end,
-  io:format("debug13~n"),
-                    dict:filter(Fun,C),
-io:format("debug14~n"),0 end.
+  io:format("Hier sollte gefiltert werden~n"),C end.
+                    %%dict:filter(fun({K,V}) ->  {Val,Time} = V,(werkzeug:timeMilliSecond()- Time) <  ClientTimeout end,C) end.
+
+
 
 log(Log) -> spawn( fun() -> io:format(Log),file:write_file("NServer.log",Log,[append])end).
 
